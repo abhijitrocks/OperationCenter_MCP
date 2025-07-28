@@ -1,15 +1,5 @@
 import React from 'react';
-import { 
-  Users, 
-  Briefcase, 
-  FileText, 
-  CheckSquare, 
-  Queue, 
-  Shield, 
-  Bot,
-  Activity,
-  MessageSquare
-} from 'lucide-react';
+import { Users, Briefcase, FileText, CheckSquare, Fuel as Queue, Shield, Bot, Activity, MessageSquare } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export type ResourceType = 
