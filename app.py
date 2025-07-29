@@ -11,6 +11,7 @@ from mcp.shared._httpx_utils import create_mcp_http_client
 from models import *
 from mcp.server.fastmcp.prompts import base
 from starlette.middleware.cors import CORSMiddleware
+from starlette.routing import Mount, Router
 
 
 load_dotenv()
@@ -33,12 +34,18 @@ async def app_lifespan(app: Starlette):
     yield {}
 
 # Create the Starlette app and mount /mcp
+# Create MCP Router that avoids redirect issues
+mcp_router = Router(routes=[], redirect_slashes=False)
+mcp_router.mount("", app=mcp.streamable_http_app())
+
+# Main app mounts the router at /mcp
 app = Starlette(
     debug=True,
     routes=[
-        Mount("/mcp/", app=mcp.streamable_http_app(), name="mcp")
+        Mount("/mcp", app=mcp_router, name="mcp")
     ],
     lifespan=app_lifespan
+)
 )
 # Enable CORS so browser-based clients can access /mcp
 app.add_middleware(
