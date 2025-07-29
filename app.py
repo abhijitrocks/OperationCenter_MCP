@@ -56,7 +56,7 @@ async def root(request):
 # Mock resource: tenants list
 @mcp.resource("ops://tenant/list")
 def list_tenants():
-   print("Handling tenant list request")
+    print("Handling tenant list request")
     return load_csv("tenants")
 
 # Example tool: compute SLA/health
