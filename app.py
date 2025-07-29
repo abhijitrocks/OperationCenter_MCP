@@ -25,8 +25,8 @@ TOKEN = os.getenv('BEARER_TOKEN', 'dev-token')
 # Authentication middleware
 class BearerTokenMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Skip auth for root health check and discovery endpoint
-        if request.url.path in ['/', '/api/discovery']:
+        # Skip auth for root health check, discovery endpoint, and MCP status
+        if request.url.path in ['/', '/api/discovery', '/api/mcp-status']:
             return await call_next(request)
         
         # Only authenticate MCP endpoints
@@ -81,7 +81,24 @@ def load_csv(name: str):
         return []
 
 # MCP instance (no auth)
-mcp = FastMCP(name="OpsCenterMCP", stateless_http=False, json_response=True)
+mcp = FastMCP(name="OpsCenterMCP", stateless_http=True, json_response=True)
+
+# Add a simple initialize handler to ensure proper MCP protocol handling
+@mcp.handler("initialize")
+async def handle_initialize(params):
+    """Handle MCP initialize request"""
+    return {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {
+            "resources": {"subscribe": True, "listChanged": True},
+            "tools": {},
+            "prompts": {}
+        },
+        "serverInfo": {
+            "name": "OpsCenterMCP",
+            "version": "1.0.0"
+        }
+    }
 
 # App lifespan
 async def app_lifespan(app: Starlette):
@@ -90,7 +107,32 @@ async def app_lifespan(app: Starlette):
 # Create the Starlette app and mount /mcp
 # Create MCP Router that avoids redirect issues
 mcp_router = Router(routes=[], redirect_slashes=False)
-mcp_router.mount("", app=mcp.streamable_http_app())
+
+# Get the MCP HTTP app
+mcp_http_app = mcp.streamable_http_app()
+
+# Add logging middleware to MCP app for debugging
+class MCPLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        print(f"🔍 MCP Request: {request.method} {request.url}")
+        print(f"🔍 MCP Headers: {dict(request.headers)}")
+        
+        try:
+            response = await call_next(request)
+            print(f"🔍 MCP Response: {response.status_code}")
+            return response
+        except Exception as e:
+            print(f"❌ MCP Error: {e}")
+            return JSONResponse(
+                {"jsonrpc": "2.0", "id": None, "error": {"code": -32603, "message": f"Internal error: {str(e)}"}},
+                status_code=500
+            )
+
+# Add logging to MCP app
+mcp_http_app.add_middleware(MCPLoggingMiddleware)
+
+# Mount the MCP app
+mcp_router.mount("", app=mcp_http_app)
 
 # Main app mounts the router at /mcp
 app = Starlette(
@@ -134,6 +176,26 @@ async def discovery_endpoint(request):
             "description": "Operations Center MCP Server"
         }
     })
+
+# Test endpoint to verify MCP server status
+@app.route("/api/mcp-status")
+async def mcp_status_endpoint(request):
+    """Test endpoint to verify MCP server is working"""
+    try:
+        # Try to get MCP server info
+        mcp_info = {
+            "mcp_server_name": mcp.name,
+            "resources_count": len(mcp._resources),
+            "tools_count": len(mcp._tools),
+            "prompts_count": len(mcp._prompts),
+            "status": "healthy"
+        }
+        return JSONResponse(mcp_info)
+    except Exception as e:
+        return JSONResponse({
+            "status": "error",
+            "error": str(e)
+        }, status_code=500)
 
 # Mock resource: tenants list
 @mcp.resource("ops://tenant/list")
