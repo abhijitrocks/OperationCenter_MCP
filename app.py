@@ -46,7 +46,6 @@ app = Starlette(
     ],
     lifespan=app_lifespan
 )
-)
 # Enable CORS so browser-based clients can access /mcp
 app.add_middleware(
     CORSMiddleware,
