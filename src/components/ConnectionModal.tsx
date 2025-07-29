@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { X, Server, Key } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Server, Key, Search, CheckCircle } from 'lucide-react';
+import { DiscoveryService } from '../services/discoveryService';
 
 interface ConnectionModalProps {
   isOpen: boolean;
@@ -18,6 +19,37 @@ export function ConnectionModal({
 }: ConnectionModalProps) {
   const [url, setUrl] = useState(currentUrl);
   const [token, setToken] = useState(currentToken);
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [discoveryResult, setDiscoveryResult] = useState<string>('');
+
+  useEffect(() => {
+    if (isOpen && !currentUrl) {
+      attemptAutoDiscovery();
+    }
+  }, [isOpen, currentUrl]);
+
+  const attemptAutoDiscovery = async () => {
+    setIsDiscovering(true);
+    setDiscoveryResult('');
+    
+    try {
+      const serverInfo = await DiscoveryService.discoverServer();
+      if (serverInfo) {
+        setUrl(serverInfo.server_url);
+        const autoToken = DiscoveryService.getAuthCredentials();
+        if (autoToken) {
+          setToken(autoToken);
+        }
+        setDiscoveryResult('✅ Server discovered automatically!');
+      } else {
+        setDiscoveryResult('❌ No server found. Please enter details manually.');
+      }
+    } catch (error) {
+      setDiscoveryResult('❌ Discovery failed. Please enter details manually.');
+    } finally {
+      setIsDiscovering(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -42,20 +74,51 @@ export function ConnectionModal({
           </button>
         </div>
 
+        {isDiscovering && (
+          <div className="mb-4 p-3 bg-blue-50 rounded-lg flex items-center">
+            <Search className="w-4 h-4 animate-spin text-blue-600 mr-2" />
+            <span className="text-blue-800">Discovering server automatically...</span>
+          </div>
+        )}
+
+        {discoveryResult && (
+          <div className={`mb-4 p-3 rounded-lg flex items-center ${
+            discoveryResult.startsWith('✅') ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'
+          }`}>
+            {discoveryResult.startsWith('✅') ? (
+              <CheckCircle className="w-4 h-4 mr-2" />
+            ) : (
+              <Search className="w-4 h-4 mr-2" />
+            )}
+            <span>{discoveryResult}</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               <Server className="w-4 h-4 inline mr-2" />
               Server URL
             </label>
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://your-mcp-server.onrender.com"
-              className="input-field w-full"
-              required
-            />
+            <div className="flex space-x-2">
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://your-mcp-server.onrender.com"
+                className="input-field flex-1"
+                required
+              />
+              <button
+                type="button"
+                onClick={attemptAutoDiscovery}
+                disabled={isDiscovering}
+                className="btn-secondary px-3"
+                title="Auto-discover server"
+              >
+                <Search className={`w-4 h-4 ${isDiscovering ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
             <p className="text-xs text-gray-500 mt-1">
               Your Render deployment URL (without /mcp path)
             </p>
