@@ -10,6 +10,8 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared._httpx_utils import create_mcp_http_client
 from models import *
 from mcp.server.fastmcp.prompts import base
+from starlette.middleware.cors import CORSMiddleware
+
 
 load_dotenv()
 
@@ -38,7 +40,14 @@ app = Starlette(
     ],
     lifespan=app_lifespan
 )
-
+# Enable CORS so browser-based clients can access /mcp
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],        # in production, replace "*" with your client URL
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
 # Root health-check must come _after_ app is defined
 @app.route("/")
 async def root(request):
@@ -47,6 +56,7 @@ async def root(request):
 # Mock resource: tenants list
 @mcp.resource("ops://tenant/list")
 def list_tenants():
+   print("Handling tenant list request")
     return load_csv("tenants")
 
 # Example tool: compute SLA/health
