@@ -23,13 +23,18 @@ export class MCPClient {
     try {
       const response = await fetch(`${this.baseUrl}/mcp`, {
         method: 'POST',
+        mode: 'cors', // Explicitly set CORS mode
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.bearerToken}`
         },
         body: JSON.stringify(request),
-        // Add timeout to prevent hanging requests
-        signal: AbortSignal.timeout(10000)
+        // Create timeout manually for better browser compatibility
+        signal: (() => {
+          const controller = new AbortController();
+          setTimeout(() => controller.abort(), 10000);
+          return controller.signal;
+        })()
       });
 
       if (!response.ok) {
