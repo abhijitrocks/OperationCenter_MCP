@@ -1,0 +1,4 @@
+id,name,metadata
+1,"Acme Corp","{\"industry\":\"tech\"}"
+2,"Global Industries","{\"industry\":\"manufacturing\"}"
+3,"StartupCo","{\"industry\":\"fintech\"}"

@@ -5,7 +5,8 @@ import { ChatPanel } from './components/ChatPanel';
 import { ConnectionModal } from './components/ConnectionModal';
 import { MCPClient } from './services/mcpClient';
 import { llmService } from './services/llmService';
-import { Settings, Loader2 } from 'lucide-react';
+import { DiscoveryService } from './services/discoveryService';
+import { Settings, Loader2, Wifi, WifiOff } from 'lucide-react';
 
 function App() {
   const [selectedResource, setSelectedResource] = useState<ResourceType>('tenants');
@@ -15,24 +16,56 @@ function App() {
   const [serverUrl, setServerUrl] = useState('');
   const [bearerToken, setBearerToken] = useState('');
   const [isInitializing, setIsInitializing] = useState(true);
+  const [discoveryAttempted, setDiscoveryAttempted] = useState(false);
 
   useEffect(() => {
-    // Load saved connection details
-    const savedUrl = localStorage.getItem('mcp_server_url');
-    const savedToken = localStorage.getItem('mcp_bearer_token');
-    
-    if (savedUrl && savedToken) {
-      setServerUrl(savedUrl);
-      setBearerToken(savedToken);
-      connectToServer(savedUrl, savedToken);
-    } else {
-      setIsInitializing(false);
-      setShowConnectionModal(true);
-    }
-
+    initializeConnection();
     // Initialize LLM service
     llmService.initialize().catch(console.error);
   }, []);
+
+  const initializeConnection = async () => {
+    setIsInitializing(true);
+    
+    try {
+      // First, try automatic discovery
+      console.log('Attempting automatic server discovery...');
+      const discoveryInfo = await DiscoveryService.discoverServer();
+      
+      if (discoveryInfo) {
+        console.log('Server discovered automatically:', discoveryInfo);
+        const token = DiscoveryService.getAuthCredentials();
+        
+        if (token) {
+          await connectToServer(discoveryInfo.server_url, token);
+          setDiscoveryAttempted(true);
+          return;
+        }
+      }
+
+      // If discovery fails, try saved connection details
+      const savedUrl = localStorage.getItem('mcp_server_url');
+      const savedToken = localStorage.getItem('mcp_bearer_token');
+      
+      if (savedUrl && savedToken) {
+        setServerUrl(savedUrl);
+        setBearerToken(savedToken);
+        await connectToServer(savedUrl, savedToken);
+        setDiscoveryAttempted(true);
+        return;
+      }
+
+      // If all else fails, show connection modal
+      setDiscoveryAttempted(true);
+      setShowConnectionModal(true);
+    } catch (error) {
+      console.error('Error during initialization:', error);
+      setDiscoveryAttempted(true);
+      setShowConnectionModal(true);
+    } finally {
+      setIsInitializing(false);
+    }
+  };
 
   const connectToServer = async (url: string, token: string) => {
     setIsInitializing(true);
@@ -74,7 +107,9 @@ function App() {
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin text-primary-600 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-700 mb-2">Initializing MCP Client</h2>
-          <p className="text-gray-500">Connecting to your Operations Center...</p>
+          <p className="text-gray-500">
+            {!discoveryAttempted ? 'Discovering server...' : 'Connecting to your Operations Center...'}
+          </p>
         </div>
       </div>
     );
@@ -95,13 +130,25 @@ function App() {
               <h1 className="text-2xl font-bold text-gray-900">Operations Center</h1>
               <p className="text-gray-600">MCP Client Interface</p>
             </div>
-            <button
-              onClick={() => setShowConnectionModal(true)}
-              className="btn-secondary flex items-center"
-            >
-              <Settings className="w-4 h-4 mr-2" />
-              {isConnected ? 'Reconnect' : 'Connect'}
-            </button>
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center">
+                {isConnected ? (
+                  <Wifi className="w-4 h-4 text-green-500 mr-2" />
+                ) : (
+                  <WifiOff className="w-4 h-4 text-red-500 mr-2" />
+                )}
+                <span className={`text-sm font-medium ${isConnected ? 'text-green-700' : 'text-red-700'}`}>
+                  {isConnected ? 'Connected' : 'Disconnected'}
+                </span>
+              </div>
+              <button
+                onClick={() => setShowConnectionModal(true)}
+                className="btn-secondary flex items-center"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                {isConnected ? 'Reconnect' : 'Connect'}
+              </button>
+            </div>
           </div>
         </header>
 
