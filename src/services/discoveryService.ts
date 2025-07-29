@@ -30,32 +30,42 @@ export class DiscoveryService {
     
     // For Render.com deployments
     if (currentHostname.includes('onrender.com')) {
-      // If client and server are on the same service, try current origin first
+      // Try current origin first (common case where both client and server are on same service)
       urls.push(currentOrigin);
       
-      // Try different service name patterns for Render
+      // Generate comprehensive list of possible server hostnames
+      const baseHostname = currentHostname.replace(/^(www\.)?/, ''); // Remove www prefix if present
       const possibleServerNames = [
-        // Remove -client suffix
-        currentHostname.replace('-client', ''),
-        // Replace client with server
-        currentHostname.replace('client', 'server'),
-        // Specific pattern for this project
-        currentHostname.replace('mcp-client', 'ops-center-mcp'),
-        // Direct service name (in case user deployed with different name)
+        // Direct replacements
+        baseHostname.replace('-client', ''),
+        baseHostname.replace('client', 'server'), 
+        baseHostname.replace('mcp-client', 'ops-center-mcp'),
+        baseHostname.replace('ui', 'api'),
+        baseHostname.replace('frontend', 'backend'),
+        baseHostname.replace('app', 'api'),
+        // Add common server prefixes/suffixes
+        `server-${baseHostname}`,
+        `api-${baseHostname}`,
+        `${baseHostname}-server`,
+        `${baseHostname}-api`,
+        // Direct service names (common patterns)
         'ops-center-mcp.onrender.com',
-        // Alternative patterns
-        currentHostname.replace('ui', 'api'),
-        currentHostname.replace('frontend', 'backend')
+        'mcp-server.onrender.com',
+        'operationcenter-mcp.onrender.com',
+        // Handle case where user might have deployed with different naming
+        baseHostname.replace('operationcenter', 'ops-center'),
+        baseHostname.replace('ops-center', 'operationcenter')
       ];
       
       // Add all unique server URLs
-      for (const serverName of [...new Set(possibleServerNames)]) {
-        if (serverName !== currentHostname && serverName.includes('onrender.com')) {
-          urls.push(`https://${serverName}`);
-        }
+      const uniqueServerNames = [...new Set(possibleServerNames)]
+        .filter(name => name !== currentHostname && name.includes('onrender.com') && name.length > 'onrender.com'.length);
+      
+      for (const serverName of uniqueServerNames) {
+        urls.push(`https://${serverName}`);
       }
       
-      console.log('Render.com deployment detected, trying server patterns:', possibleServerNames);
+      console.log('Render.com deployment detected, trying server patterns:', uniqueServerNames);
     }
     
     // For localhost development
@@ -119,20 +129,24 @@ export class DiscoveryService {
   private static async tryDiscovery(baseUrl: string): Promise<ServerDiscoveryInfo | null> {
     // First, try a quick health check to see if server is reachable
     try {
+      console.log(`  🔍 Checking server health at: ${baseUrl}`);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // Increased timeout
       
       const healthResponse = await fetch(`${baseUrl}/`, {
         method: 'GET',
+        mode: 'cors', // Explicitly set CORS mode
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
       
       if (!healthResponse.ok) {
-        console.log(`  ❌ Server not reachable at ${baseUrl} (HTTP ${healthResponse.status})`);
+        console.log(`  ❌ Server health check failed at ${baseUrl} (HTTP ${healthResponse.status})`);
         return null;
       }
+      
+      console.log(`  ✅ Server is reachable at ${baseUrl}`);
     } catch (error) {
       console.log(`  ❌ Server not reachable at ${baseUrl}: ${error.message}`);
       return null;
@@ -149,6 +163,7 @@ export class DiscoveryService {
         
         const response = await fetch(`${baseUrl}${endpoint}`, {
           method: 'GET',
+          mode: 'cors', // Explicitly set CORS mode
           headers: {
             'Accept': 'application/json',
           },

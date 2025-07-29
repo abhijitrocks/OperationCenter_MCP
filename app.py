@@ -101,10 +101,7 @@ app = Starlette(
     lifespan=app_lifespan
 )
 
-# Add authentication middleware
-app.add_middleware(BearerTokenMiddleware)
-
-# Enable CORS so browser-based clients can access /mcp
+# Enable CORS FIRST - must come before authentication middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],        # in production, replace "*" with your client URL
@@ -112,6 +109,9 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=True,
 )
+
+# Add authentication middleware AFTER CORS
+app.add_middleware(BearerTokenMiddleware)
 
 # Root health-check must come _after_ app is defined
 @app.route("/")
