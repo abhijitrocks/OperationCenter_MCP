@@ -91,6 +91,33 @@ export class ConnectionTester {
         result.details.push(`❌ Discovery endpoint failed: ${error.message}`);
       }
 
+      // Test 2.5: MCP Status Endpoint (for debugging)
+      result.details.push('🔍 Testing MCP status endpoint...');
+      try {
+        const statusResponse = await fetch(`${baseUrl}/api/mcp-status`, {
+          method: 'GET',
+          mode: 'cors',
+          headers: {
+            'Accept': 'application/json',
+          },
+          signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : (() => {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), 5000);
+            return controller.signal;
+          })()
+        });
+
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json();
+          result.details.push('✅ MCP status endpoint accessible');
+          result.details.push(`📊 MCP server: ${statusData.mcp_server_name}, Resources: ${statusData.resources_count}, Tools: ${statusData.tools_count}`);
+        } else {
+          result.details.push(`⚠️ MCP status endpoint failed: HTTP ${statusResponse.status}`);
+        }
+      } catch (error: any) {
+        result.details.push(`⚠️ MCP status endpoint failed: ${error.message}`);
+      }
+
       // Test 3: MCP Endpoint (if token provided)
       if (bearerToken) {
         result.details.push('🔍 Testing MCP endpoint with authentication...');
@@ -133,10 +160,25 @@ export class ConnectionTester {
             result.mcpEndpoint = true;
             result.details.push('✅ MCP endpoint accessible with authentication');
             result.details.push(`📋 Protocol version: ${mcpData.result?.protocolVersion || 'Unknown'}`);
+            if (mcpData.result?.serverInfo) {
+              result.details.push(`📋 Server: ${mcpData.result.serverInfo.name} v${mcpData.result.serverInfo.version}`);
+            }
           } else if (mcpResponse.status === 401) {
             result.details.push('❌ MCP endpoint authentication failed (invalid token)');
+            try {
+              const errorData = await mcpResponse.json();
+              result.details.push(`🔍 Auth error details: ${errorData.error || 'No details available'}`);
+            } catch {
+              result.details.push('🔍 Could not parse auth error response');
+            }
           } else {
             result.details.push(`❌ MCP endpoint failed: HTTP ${mcpResponse.status}`);
+            try {
+              const errorText = await mcpResponse.text();
+              result.details.push(`🔍 Error details: ${errorText.slice(0, 200)}`);
+            } catch {
+              result.details.push('🔍 Could not read error response');
+            }
           }
         } catch (error: any) {
           result.details.push(`❌ MCP endpoint failed: ${error.message}`);
