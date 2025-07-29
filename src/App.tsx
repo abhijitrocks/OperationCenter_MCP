@@ -28,9 +28,18 @@ function App() {
     setIsInitializing(true);
     
     try {
-      // First, try automatic discovery
+      // First, try automatic discovery with timeout
       console.log('Attempting automatic server discovery...');
-      const discoveryInfo = await DiscoveryService.discoverServer();
+      
+      const discoveryPromise = DiscoveryService.discoverServer();
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
+          console.log('Discovery timeout reached, falling back to saved credentials');
+          resolve(null);
+        }, 10000); // 10 second total timeout for discovery
+      });
+      
+      const discoveryInfo = await Promise.race([discoveryPromise, timeoutPromise]);
       
       if (discoveryInfo) {
         console.log('Server discovered automatically:', discoveryInfo);
@@ -44,10 +53,12 @@ function App() {
       }
 
       // If discovery fails, try saved connection details
+      console.log('Trying saved connection details...');
       const savedUrl = localStorage.getItem('mcp_server_url');
       const savedToken = localStorage.getItem('mcp_bearer_token');
       
       if (savedUrl && savedToken) {
+        console.log('Found saved credentials, attempting connection...');
         setServerUrl(savedUrl);
         setBearerToken(savedToken);
         await connectToServer(savedUrl, savedToken);
@@ -56,6 +67,7 @@ function App() {
       }
 
       // If all else fails, show connection modal
+      console.log('No automatic discovery or saved credentials, showing manual connection modal');
       setDiscoveryAttempted(true);
       setShowConnectionModal(true);
     } catch (error) {
@@ -110,6 +122,23 @@ function App() {
           <p className="text-gray-500">
             {!discoveryAttempted ? 'Discovering server...' : 'Connecting to your Operations Center...'}
           </p>
+          <div className="mt-4 text-xs text-gray-400">
+            <p>Debug: Check browser console for detailed logs</p>
+            <p>Current URL: {window.location.href}</p>
+          </div>
+          {!discoveryAttempted && (
+            <button
+              onClick={() => {
+                console.log('User skipped discovery');
+                setDiscoveryAttempted(true);
+                setIsInitializing(false);
+                setShowConnectionModal(true);
+              }}
+              className="mt-4 text-sm text-blue-600 hover:text-blue-800 underline"
+            >
+              Skip discovery and connect manually
+            </button>
+          )}
         </div>
       </div>
     );
